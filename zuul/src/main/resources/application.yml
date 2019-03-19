@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: zuul
+server:
+  port: 8765
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+zuul:
+  routes:
+    eureka-hello-client: /api/hello/**  # /api/hello的请求都转发到eureka-hello-client

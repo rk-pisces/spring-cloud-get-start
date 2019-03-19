@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: feign-client-fallback
+server:
+  port: 9083
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+feign:
+  hystrix:
+    enabled: true
