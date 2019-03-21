@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: feign-client-grey
+server:
+  port: 9094
+
+eureka:
+  instance:
+    metadata-map: # 元数据 注册服务时会提交到eureka 在调用方获取服务列表后 可以取到这些数据
+      env: v2
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+ribbon:
+  ConnectTimeout: 1500
+  ReadTimeout: 20000

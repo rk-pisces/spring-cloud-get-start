@@ -466,7 +466,7 @@ eureka:
 
 
 
-### 启动Eureka Server
+### 启动Eureka Client
 
 ​	在启动类DemoApplication上右键运行main方法即可，启动完成后重新访问[Eureka Server](http://localhost:8761/)，可以看到注册上来的eureka-hello-client实例
 
@@ -1004,11 +1004,581 @@ hystrix:
 
 ![](./images/49.png)
 
+# Ribbon
+
+> Ribbon是一个客户端的负载均衡器，它提供对大量HTTP和TCP客户端的访问控制。Ribbon可以根据在客户端配置的RibbonServerList（服务端列表），然后根据负载均衡策略确定请求发往哪个具体的服务端。
+>
+> Ribbon在和Eureka一起使用时，RibbonServerList会被DiscoveryEnabledNIWSServerList重写，扩展成从Eureka获取的服务端列表；同时它也会用NIWSDiscoveryPing来取代IPing，将职责委托给Eureka来确定服务端是否已经启动。
 
 
 
+## 与Zuul的差别
+
+​	Zuul作为微服务接入的统一网关，Zuul提供的负载均衡针对的外部请求，与F5转发类似，属于服务端的负载均衡。
+
+​	Ribbon的负载均衡是解决服务发起方调用服务提供方时的负载问题，由服务发起方决定请求发往哪个服务提供方。
+
+![](./images/50.png)
+
+
+
+## 负载均衡效果演示
+
+​	Feign内部Ribbon的组件，也默认使用Ribbon实现负载均衡，在不做任何设置的情况下，Ribbon默认以轮询方式做负载均衡。
+
+​	为了演示负载均衡效果，我们需要启动多个feign-server实例，在启动第一个实例后，修改server.port和hello接口返回内容，再次启动一个实例。
+
+```yml
+spring:
+  application:
+    name: feign-server
+server:
+  port: 9083
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+```
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@RestController
+public class DemoApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(DemoApplication.class, args);
+	}
+
+	@GetMapping("/hello")
+	public String hello(){
+		return "feign-server say hello 2 !";
+	}
+}
+
+```
 
 ​	
+
+所有服务启动后，在[eureka](http://localhost:8761)上可以看到一个client实例和两个server实例。
+
+![](./images/51.png)
+
+​	
+
+然后我们请求[client](http://localhost:9081/hello)，多次刷新可以看到server的返回按照一次feign-server say hello一次feign-server say hello 2交替，说明client每次都访问到上一次没有访问的server实例。
+
+![](./images/52.png)
+
+![](images/53.png)
+
+## 灰度发布
+
+> 灰度发布（又名金丝雀发布）是指在黑与白之间，能够平滑过渡的一种发布方式。在其上可以进行A/B testing，即让一部分用户继续用产品特性A，一部分用户开始用产品特性B，如果用户对B没有什么反对意见，那么逐步扩大范围，把所有用户都迁移到B上面来。灰度发布可以保证整体系统的稳定，在初始灰度的时候就可以发现、调整问题，以保证其影响度。  ——百度百科
+
+​	简单来说就是让一部分用户访问到新功能的版本，另一部分用户继续访问老功能的版本。
+
+​	在微服务上实现灰度发布，需要同时在网关和微服务内部实现灰度。网关的灰度主要解决用户请求进来时应该路由到哪个版本的问题，可以通过用户名单、ip地址、地区等条件对请求进行分类；而微服务内部的灰度则是根据网关给出的灰度参数，保证请求调用链经过的服务实例都是同一个版本的实例。
+
+
+
+​	这里我们通过一个简单的场景来模拟灰度的情况，根据用户请求的request header中env的值来进行灰度的路由，当env=v1时，请求访问经过zuul-grey、feign-client-grey-v1、feign-server-grey-v1；当env=v2时，请求访问经过zuul、feign-client-grey-v2、feign-server-grey-v2。
+
+```mermaid
+graph LR
+A(zuul-grey) --> B1(feign-client-grey-v1)
+B1 --> C1(feign-server-grey-v1)
+A --> B2(feign-client-grey-v2)
+B2 --> C2(feign-server-grey-v2)
+```
+
+
+
+ ## zuul-grey
+
+​	复制zuul工程，并改名为zuul-grey，同时修改pom.xml中artifactId的值。修改完成后使用IDEA打开工程。
+
+```xml
+<artifactId>zuul-grey</artifactId>
+```
+
+
+
+### 添加依赖包
+
+​	在pom.xml中添加ribbon的依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-eureka</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-zuul</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-ribbon</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.jmnarloch</groupId>
+        <artifactId>ribbon-discovery-filter-spring-cloud-starter</artifactId>
+        <version>2.1.0</version>
+    </dependency>
+
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+### 修改配置
+
+​	修改application.name、server.port、zuul路由规则
+
+```yml
+spring:
+  application:
+    name: zuul-grey
+server:
+  port: 8766
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+zuul:
+  routes:
+    feign-client-grey: /api/hello/**
+
+ribbon:
+  ConnectTimeout: 1500
+  ReadTimeout: 20000
+```
+
+
+
+### 添加ZuulFilter子类
+
+​	EnvFilter类完成requset header中env的读取，并告诉Ribbon根据env的值进行路由。
+
+```java
+package com.nbcb.demo;
+
+import com.netflix.zuul.ZuulFilter;
+import com.netflix.zuul.context.RequestContext;
+import com.netflix.zuul.exception.ZuulException;
+import io.jmnarloch.spring.cloud.ribbon.support.RibbonFilterContextHolder;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Configuration;
+
+import javax.servlet.http.HttpServletRequest;
+
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.PRE_DECORATION_FILTER_ORDER;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.PRE_TYPE;
+
+@Configuration
+@Slf4j
+public class EnvFilter extends ZuulFilter {
+
+    @Override
+    public String filterType() {
+        return PRE_TYPE;
+    }
+
+    @Override
+    public int filterOrder() {
+        return PRE_DECORATION_FILTER_ORDER - 1;
+    }
+
+    @Override
+    public boolean shouldFilter() {
+        return true;
+    }
+
+    @Override
+    public Object run() throws ZuulException {
+
+        RequestContext context = RequestContext.getCurrentContext();
+        HttpServletRequest request = context.getRequest();
+        String env = request.getHeader("env");
+        log.info("customer visit with env = {}", env);
+        if (null == env || env.isEmpty()) {
+            RibbonFilterContextHolder.getCurrentContext().add("env", "v1");
+        } else {
+            RibbonFilterContextHolder.getCurrentContext().add("env", env);
+        }
+        return null;
+    }
+}
+
+```
+
+
+
+### 启动zuul-grey
+
+​	在启动类DemoApplication上右键运行main方法即可，启动完成后重新访问[Eureka Server](http://localhost:8761/)，可以看到注册上来的zuul-grey实例
+
+![](./images/54.png)
+
+
+
+## feign-client-grey
+
+​	复制feign-client工程，并改名为feign-client-grey，同时修改pom.xml中artifactId的值。修改完成后使用IDEA打开工程。
+
+```xml
+<artifactId>feign-client-grey</artifactId>
+```
+
+
+
+### 添加依赖包
+
+​	在pom.xml中添加ribbon的依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-eureka</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-feign</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>io.jmnarloch</groupId>
+        <artifactId>ribbon-discovery-filter-spring-cloud-starter</artifactId>
+        <version>2.1.0</version>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+### 修改配置
+
+​	修改application.name、server.port，并添加eureka元数据。
+
+```yaml
+spring:
+  application:
+    name: zuul-grey
+server:
+  port: 8766
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+zuul:
+  routes:
+    feign-client-grey: /api/hello/**
+
+ribbon:
+  ConnectTimeout: 1500
+  ReadTimeout: 20000
+```
+
+
+
+### 修改启动类
+
+​	返回内容中添加启动端口
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@RestController
+@EnableFeignClients
+public class DemoApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+
+    @Autowired
+    private FeignServerGrey feignServerGrey;
+
+    @Value("${server.port}")
+    private String port;
+
+    @GetMapping("/hello")
+    public String hello() {
+        return "feign-client say hello from " + port + " ! " +
+                feignServerGrey.hello();
+    }
+
+}
+```
+
+
+
+
+
+### 修改FeignServer
+
+​	将调用改为feign-server-grey的接口
+
+```java
+@FeignClient(name = "feign-server-grey")
+public interface FeignServerGrey {
+
+    @GetMapping("/hello")
+    public String hello();
+}
+```
+
+
+
+### 添加EnvInterceptor
+
+​	同样feign-client-grey中也需要告诉Ribbon根据request header的env值进行路由
+
+```java
+package com.nbcb.demo;
+
+import io.jmnarloch.spring.cloud.ribbon.support.RibbonFilterContextHolder;
+import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+/**
+ * ribbonfilter 根据request头中env的值进行路由
+ * @author 任侃-141398
+ */
+public class EnvInterceptor extends HandlerInterceptorAdapter {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        RibbonFilterContextHolder.clearCurrentContext();
+        String env = request.getHeader("env");
+        if (null == env) {
+            RibbonFilterContextHolder.getCurrentContext().add("env", "v1");
+        } else {
+            RibbonFilterContextHolder.getCurrentContext().add("env", env);
+        }
+        return true;
+    }
+}
+
+```
+
+
+
+### 添加EnvWebMvcConfigurerAdapter
+
+```java
+package com.nbcb.demo;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+
+/**
+ * 添加ribbonfilter
+ * @author 任侃-141398
+ */
+@Configuration
+public class EnvWebMvcConfigurerAdapter extends WebMvcConfigurerAdapter {
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        super.addInterceptors(registry);
+        registry.addInterceptor(new EnvInterceptor());
+    }
+}
+
+```
+
+
+
+### 启动feign-client-grey-v1
+
+​	在启动类DemoApplication上右键运行main方法即可，启动完成后重新访问[Eureka Server](http://localhost:8761/)，可以看到注册上来的feign-client-grey-v1实例
+
+![](./images/55.png)
+
+
+
+### 启动feign-client-grey-v2
+
+​	调整配置文件，然后启动一个新的实例，启动完成后重新访问[Eureka Server](http://localhost:8761/)，可以看到注册上来的feign-client-grey-v2实例
+
+```yml
+spring:
+  application:
+    name: feign-client-grey
+server:
+  port: 9091
+
+eureka:
+  instance:
+    metadata-map: # 元数据 注册服务时会提交到eureka 在调用方获取服务列表后 可以取到这些数据
+      env: v2
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+```
+
+
+
+![](./images/56.png)
+
+
+
+## feign-server-grey
+
+​	复制feign-server工程，并改名为feign-client-grey，同时修改pom.xml中artifactId的值。修改完成后使用IDEA打开工程。
+
+```xml
+<artifactId>feign-server-grey</artifactId>
+```
+
+
+
+### 修改配置
+
+​	修改application.name、server.port，并添加eureka元数据
+
+```ym
+spring:
+   application:
+     name: feign-server-grey
+server:
+  port: 9092
+
+eureka:
+  instance:
+    metadata-map:
+      env: v1
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+```
+
+
+
+### 修改启动类
+
+​	在hello服务中返回启动端口
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@RestController
+public class DemoApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+
+    @Value("${server.port}")
+    private String port;
+
+    @GetMapping("/hello")
+    public String hello() {
+        return "feign-server say hello from port " + port;
+    }
+}
+
+```
+
+
+
+### 启动feign-server-grey-v1
+
+​	在启动类DemoApplication上右键运行main方法即可，启动完成后重新访问[Eureka Server](http://localhost:8761/)，可以看到注册上来的feign-server-grey-v1实例
+
+![](./images/58.png)
+
+
+
+### 启动feign-server-grey-v2
+
+​	调整配置文件，然后启动一个新的实例，启动完成后重新访问[Eureka Server](http://localhost:8761/)，可以看到注册上来的feign-server-grey-v2实例
+
+```yml
+spring:
+   application:
+     name: feign-server-grey
+ server:
+   port: 9093
+
+eureka:
+  instance:
+    metadata-map:
+      env: v2
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+```
+
+
+
+![](./images/59.png)
+
+
+
+## 灰度验证
+
+​	通过Postman发模拟报文，在request header中分别设置env=v1与env=v2，查看接口返回。
+
+![](./images/60.png)
+
+![](./images/61.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

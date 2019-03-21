@@ -1,0 +1,13 @@
+spring:
+   application:
+     name: feign-server-grey
+server:
+  port: 9095
+
+eureka:
+  instance:
+    metadata-map:
+      env: v2
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
