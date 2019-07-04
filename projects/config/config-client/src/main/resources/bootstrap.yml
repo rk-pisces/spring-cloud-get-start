@@ -1,0 +1,19 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: config-client
+  cloud:
+    config:
+      uri: http://localhost:9090
+      name: config-client
+      profile: ${spring.profiles.active:default}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*" # 暴露所有端点
+  endpoint:
+    health:
+      show-details: ALWAYS

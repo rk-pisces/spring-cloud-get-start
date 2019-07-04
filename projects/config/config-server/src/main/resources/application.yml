@@ -1,0 +1,12 @@
+server:
+  port: 9090
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          searchLocations: file:C:\Users\renkan\Desktop\课程-微服务培训（2）\projects\config\config # 配置文件存放路径

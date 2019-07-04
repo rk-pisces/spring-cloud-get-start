@@ -1,0 +1,44 @@
+server:
+  port:
+    8081
+
+logging:
+  level:
+    org.springframework.cloud.gateway: TRACE
+    org.springframework.http.server.reactive: DEBUG
+    org.springfremework.web.reactive: DEBUG
+    reactor.ipc.netty: DEBUG
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: hello_route
+          uri: http://localhost:9080
+          predicates:
+            - Path=/hello
+
+---
+spring:
+  profiles: before
+  cloud:
+    gateway:
+      routes:
+        - id: hello_route
+          uri: http://localhost:9080
+          predicates:
+            - Before=2019-05-26T16:18:02.459+08:00[Asia/Shanghai]
+
+---
+spring:
+  profiles: addheader
+  cloud:
+    gateway:
+      routes:
+        - id: hello_route
+          uri: http://localhost:9080
+          predicates:
+            - Path=/hello
+          filters:
+            - AddRequestHeader=test,123
+

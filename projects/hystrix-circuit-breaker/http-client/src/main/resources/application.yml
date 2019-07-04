@@ -1,0 +1,40 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: http-client
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+ribbon:
+  ConnectTimeout: 5000
+  ReadTimeout: 20000
+  MaxAutoRetries: 0	# 同一个实例重试次数
+  MaxAutoRetriesNextServer: 0 # 其他实例重试次数
+  OkToRetryOnAllOperations: false # 是否所有操作都重试 false时只重试Get请求
+
+feign:
+  hystrix:
+    enabled: true # 开启feign的hystrix功能
+
+hystrix:
+  command:
+    default:
+      execution:
+        isolation:
+          thread:
+            timeoutInMilliseconds: 5000 # 配置HystrixCommand的超时时间（毫秒），执行超过该配置值时HystrixCommand被标记为TIMEOUT，并进入降级处理逻辑。
+      circuitBreaker:
+        requestVolumeThreshold: 2 # 设置在一个滚动窗口中（默认值10秒），打开断路器的最少请求数。
+        sleepWindowInMilliseconds: 5000 # 设置断路器打开后休眠时间窗, 休眠时间窗结束后，会将断路器置为“半开”状态，尝试熔断的请求命令，如果成功将断路器置为“打开”状态，失败则继续置为“关闭”状态。
+        errorThresholdPercentage: 100 # 设置断路器打开的错误百分比，在滚动时间窗中，请求数超过circuitBreaker.requestVolumeThreshold的前提下，如果错误请求是超过此百分比，就把断路器设置为“打开”，否则设置为“关闭”
+  threadpool:
+    default:
+      metrics:
+        rollingStats:
+          timeInMilliseconds: 20000 # 设置统计的滚动窗口的时间段大小（毫秒）
+          numBuckets: 1 # 设置滚动的统计窗口被分成的桶（bucket）的数目。
+

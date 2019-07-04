@@ -1,0 +1,18 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: http-client
+  zipkin:
+    base-url: http://localhost:9411
+  sleuth:
+    sampler:
+      probability: 1.0 # 采样率为1
+
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+

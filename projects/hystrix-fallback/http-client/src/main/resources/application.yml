@@ -1,0 +1,22 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: http-client
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+feign:
+  hystrix:
+    enabled: false # 开启feign的hystrix功能
+
+hystrix:
+  command:
+    default:
+      execution:
+        isolation:
+          thread:
+            timeoutInMilliseconds: 5000 # 超时时间改为5秒 默认1秒

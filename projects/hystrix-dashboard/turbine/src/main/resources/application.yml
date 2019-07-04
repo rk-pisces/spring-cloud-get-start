@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: hystrix-turbine
+server:
+  port: 8086
+
+eureka:
+  client:
+    registerWithEureka: false # 不注册到注册中心
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+turbine:
+  app-config: http-client,http-client-2   # 需要监控的服务名 多个时使用,分割
+  cluster-name-expression: new String("default")
+  combine-host-port: true
+

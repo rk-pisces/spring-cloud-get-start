@@ -1,0 +1,19 @@
+server:
+  port: 8888
+spring:
+  application:
+    name: admin-server
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*" # 暴露所有端点
+  endpoint:
+    health:
+      show-details: ALWAYS
